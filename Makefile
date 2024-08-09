@@ -36,7 +36,7 @@ test: $(DEPENDENCIES)
 
 .PHONY: test-verbose
 test-verbose: $(DEPENDENCIES)
-	pytest  -rP --log-cli-level=10 tests/
+	pytest  -rP -o log_cli=true --log-cli-level=10 tests/
 
 .PHONY: fix
 fix: $(DEPENDENCIES)
