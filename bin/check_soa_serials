@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+""" Run check_soa_serials from its module """
+
+from check_soa_serials import __main__
+__main__.main()
