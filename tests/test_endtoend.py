@@ -196,6 +196,7 @@ test_cases: list = [
     ),
 ]
 
+
 # pylint: disable=unused-argument
 # pylint: disable=redefined-outer-name
 @pytest.mark.parametrize(
