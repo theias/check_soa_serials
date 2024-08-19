@@ -11,6 +11,7 @@ from typing import List, Generator, Optional, TypeVar
 import dns.resolver
 import nagiosplugin  # type:ignore
 from dns.exception import DNSException
+from dns.exception import SyntaxError as DNSSyntaxError
 
 U = TypeVar("U", bound=nagiosplugin.Metric)
 
@@ -173,7 +174,11 @@ class SOASerials(nagiosplugin.Resource):
         for host in hosts:
             # Sort out ports which may not be present
             elements = host.split(":")
-            host_addr: str = "127.0.0.1" if elements[0] == "localhost" else elements[0]
+            host_addr: str = (
+                elements[0]
+                if self.validate_ip(elements[0])
+                else self.resolve(elements[0])
+            )
             port: int
             if len(elements) > 1:
                 port = int(elements[1])
@@ -191,6 +196,27 @@ class SOASerials(nagiosplugin.Resource):
         self.warn_zones: List[str] = []
         self.crit_zones: List[str] = []
 
+    @staticmethod
+    def resolve(hostname: str) -> str:
+        """
+        Get IP from hostname
+        """
+        result = dns.resolver.resolve(hostname, "A")
+        # Just take the first IP from the answer
+        return result[0].to_text()
+
+    @staticmethod
+    def validate_ip(address: str) -> bool:
+        """
+        Validate a string as a valid IPv4/6 IP address
+        """
+        try:
+            dns.ipv4.inet_aton(address)
+            dns.ipv6.inet_aton(address)
+            return True
+        except DNSSyntaxError:
+            return False
+
     def probe(self) -> Generator[nagiosplugin.Metric, None, None]:
         """
         Run the check itself
@@ -198,9 +224,13 @@ class SOASerials(nagiosplugin.Resource):
         warn_zones_c: int = 0
         crit_zones_c: int = 0
         for zone in self.zones:
-            logger.debug("Processing zone `%s`", zone)
             vals: List[int] = []
             for resolver in self.resolvers:
+                logger.debug(
+                    "Processing zone `%s` against resolver `%s`",
+                    zone,
+                    resolver.nameservers,
+                )
                 try:
                     soa_serial = resolver.resolve(zone, "SOA", tcp=self.tcp)[0].serial
                 except DNSException as err:
