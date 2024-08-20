@@ -1,8 +1,11 @@
 """ End-to-end tests """
 
+import atexit
 import logging
 import multiprocessing
+import os
 import socket
+import tempfile
 from multiprocessing.managers import ListProxy
 from typing import Generator
 from warnings import filterwarnings
@@ -77,6 +80,26 @@ def dummy_server(request: DNS, request_history: list) -> Generator:
     udp_proc.terminate()
 
 
+def temp_zones_file() -> str:
+    """Make a tempfile and cleanup at end"""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, encoding="utf-8") as tfile:
+        tfile.write("domain.tld\ndomain2.tld\n")
+        tfile_path: str = tfile.name
+    return tfile_path
+
+
+def rm_temp_zones_file(filepath: str) -> None:
+    """Cleanup the temp file"""
+    os.remove(filepath)
+
+
+# Get the first item from the generator and let it hang so it cleans itself up
+# after the session
+TMP_ZONES_FILE: str = temp_zones_file()
+
+atexit.register(rm_temp_zones_file, TMP_ZONES_FILE)
+
+
 # As the tool we are testing must compare the results from two servers
 dummy_server_1 = dummy_server
 dummy_server_2 = dummy_server
@@ -95,6 +118,28 @@ test_cases: list = [
         [
             "--zone",
             "domain.tld",
+            f"localhost:{SRV_PORT_1}",
+            f"localhost:{SRV_PORT_2}",
+        ],
+        {
+            "returncode": 0,
+            "output": "SOASERIALS OK - zones_not_ok is 0 | zones_not_ok=0;0;0",
+            "request_history": [
+                ("udp", "domain.tld."),
+            ],
+        },
+    ),
+    (
+        # OK with zones from file
+        {
+            "port": SRV_PORT_1,
+        },
+        {
+            "port": SRV_PORT_2,
+        },
+        [
+            "--zones-file",
+            TMP_ZONES_FILE,
             f"localhost:{SRV_PORT_1}",
             f"localhost:{SRV_PORT_2}",
         ],
@@ -205,6 +250,7 @@ test_cases: list = [
     indirect=["dummy_server_1", "dummy_server_2"],
     ids=[
         "OK with default thresholds and check precise output",
+        "OK with zones from file",
         "OK with default thresholds over TCP",
         "WARN instead of CRIT and check precise output",
         "CRIT and check precise output",

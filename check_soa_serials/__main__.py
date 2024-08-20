@@ -53,7 +53,8 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     def read_lines(filepath: str) -> List[str]:
         lines: List[str] = []
         with open(filepath, "r", encoding="utf-8") as fileh:
-            lines.append(fileh.readline().lower().strip())
+            for line in fileh:
+                lines.append(line.lower().strip())
         return lines
 
     parser.add_argument(
@@ -123,7 +124,7 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
 
     if args.zones_from_file is None and args.zones_from_args is None:
         raise argparse.ArgumentTypeError(
-            "At least one of `--zone` or `--zone-file` are required"
+            "At least one of `--zone` or `--zones-file` are required"
         )
     # Combine zones lists from multiple sources into one field
     combo: argparse.Namespace = argparse.Namespace(

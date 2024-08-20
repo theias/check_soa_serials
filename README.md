@@ -48,7 +48,7 @@ For more on Nagios plugin ranges, thresholds, perfdata, and return codes, see [N
 Here is an Icinga2 `CheckCommand` object for this plugin:
 
 ```
-object CheckCommand "check_soa_serials" {
+object CheckCommand "soa_serials" {
   command = [ PluginDir + "/check_soa_serials", ]
   arguments = {
     "--critical" = {
