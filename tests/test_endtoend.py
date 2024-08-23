@@ -83,7 +83,7 @@ def dummy_server(request: DNS, request_history: list) -> Generator:
 def temp_zones_file() -> str:
     """Make a tempfile and cleanup at end"""
     with tempfile.NamedTemporaryFile(mode="w", delete=False, encoding="utf-8") as tfile:
-        tfile.write("domain.tld\ndomain2.tld\n")
+        tfile.write("domain1.tld\ndomain2.tld\n")
         tfile_path: str = tfile.name
     return tfile_path
 
@@ -108,7 +108,7 @@ dummy_server_2 = dummy_server
 test_cases: list = [
     # <server 1 params>, <server 2 params>, <program args>, <expected results>
     (
-        # OK with default thresholds and check precise output
+        # OK with default thresholds
         {
             "port": SRV_PORT_1,
         },
@@ -123,7 +123,145 @@ test_cases: list = [
         ],
         {
             "returncode": 0,
-            "output": "SOASERIALS OK - zones_not_ok is 0 | zones_not_ok=0;0;0",
+            "output": (
+                "SOASERIALS OK - zones_critical is 0 | zones_critical=0;~:;0 "
+                "zones_warning=0;0;~:"
+            ),
+            "request_history": [
+                ("udp", "domain.tld."),
+            ],
+        },
+    ),
+    (
+        # CRIT with default thresholds
+        {
+            "port": SRV_PORT_1,
+            "zone_soa_mappings": {
+                "domain.tld": 1,
+            },
+        },
+        {
+            "port": SRV_PORT_2,
+            "zone_soa_mappings": {
+                "domain.tld": 5,
+            },
+        },
+        [
+            "--zone",
+            "domain.tld",
+            f"localhost:{SRV_PORT_1}",
+            f"localhost:{SRV_PORT_2}",
+        ],
+        {
+            "returncode": 2,
+            "output": (
+                "SOASERIALS CRITICAL - zones_critical is 1: domain.tld (outside range "
+                "0:0) | zones_critical=1;~:;0 zones_warning=0;0;~:"
+            ),
+            "request_history": [
+                ("udp", "domain.tld."),
+            ],
+        },
+    ),
+    (
+        # OK with a higher threshold
+        {
+            "port": SRV_PORT_1,
+            "zone_soa_mappings": {
+                "domain.tld": 1,
+            },
+        },
+        {
+            "port": SRV_PORT_2,
+            "zone_soa_mappings": {
+                "domain.tld": 2,
+            },
+        },
+        [
+            "--zone",
+            "domain.tld",
+            # Crit if number of bad zones is outside -inf:inf which is
+            # impossible,  thus only WARN
+            "--critical=2",
+            "--warning=2",
+            f"localhost:{SRV_PORT_1}",
+            f"localhost:{SRV_PORT_2}",
+        ],
+        {
+            "returncode": 0,
+            "output": (
+                "SOASERIALS OK - zones_critical is 0 | zones_critical=0;~:;0 "
+                "zones_warning=0;0;~:"
+            ),
+            "request_history": [
+                ("udp", "domain.tld."),
+            ],
+        },
+    ),
+    (
+        # Warn (not CRIT) with a higher threshold
+        {
+            "port": SRV_PORT_1,
+            "zone_soa_mappings": {
+                "domain.tld": 1,
+            },
+        },
+        {
+            "port": SRV_PORT_2,
+            "zone_soa_mappings": {
+                "domain.tld": 9,
+            },
+        },
+        [
+            "--zone",
+            "domain.tld",
+            # Crit if number of bad zones is outside -inf:inf which is
+            # impossible,  thus only WARN
+            "--critical=~:",
+            "--warning=3",
+            f"localhost:{SRV_PORT_1}",
+            f"localhost:{SRV_PORT_2}",
+        ],
+        {
+            "returncode": 1,
+            "output": (
+                "SOASERIALS WARNING - zones_warning is 1: domain.tld (outside range "
+                "0:0) | zones_critical=0;~:;0 zones_warning=1;0;~:"
+            ),
+            "request_history": [
+                ("udp", "domain.tld."),
+            ],
+        },
+    ),
+    (
+        # Crit with a higher threshold
+        {
+            "port": SRV_PORT_1,
+            "zone_soa_mappings": {
+                "domain.tld": 1,
+            },
+        },
+        {
+            "port": SRV_PORT_2,
+            "zone_soa_mappings": {
+                "domain.tld": 101,
+            },
+        },
+        [
+            "--zone",
+            "domain.tld",
+            # Crit if number of bad zones is outside -inf:inf which is
+            # impossible,  thus only WARN
+            "--critical=99",
+            f"localhost:{SRV_PORT_1}",
+            f"localhost:{SRV_PORT_2}",
+        ],
+        {
+            "returncode": 2,
+            "output": (
+                "SOASERIALS CRITICAL - zones_critical is 1: domain.tld (outside range "
+                "0:0) | zones_critical=1;~:;0 zones_warning=0;0;~:"
+            ),
             "request_history": [
                 ("udp", "domain.tld."),
             ],
@@ -145,9 +283,13 @@ test_cases: list = [
         ],
         {
             "returncode": 0,
-            "output": "SOASERIALS OK - zones_not_ok is 0 | zones_not_ok=0;0;0",
+            "output": (
+                "SOASERIALS OK - zones_critical is 0 | zones_critical=0;~:;0 "
+                "zones_warning=0;0;~:"
+            ),
             "request_history": [
-                ("udp", "domain.tld."),
+                ("udp", "domain1.tld."),
+                ("udp", "domain2.tld."),
             ],
         },
     ),
@@ -174,71 +316,6 @@ test_cases: list = [
             ],
         },
     ),
-    (
-        # WARN instead of CRIT and check precise output
-        {
-            "port": SRV_PORT_1,
-            "zone_soa_mappings": {
-                "domain.tld": 1,
-            },
-        },
-        {
-            "port": SRV_PORT_2,
-            "zone_soa_mappings": {
-                "domain.tld": 2,
-            },
-        },
-        [
-            "--zone",
-            "domain.tld",
-            # Crit if number of bad zones is outside -inf:inf which is
-            # impossible,  thus only WARN
-            "--critical=~:",
-            f"localhost:{SRV_PORT_1}",
-            f"localhost:{SRV_PORT_2}",
-        ],
-        {
-            "returncode": 1,
-            "output": (
-                "SOASERIALS WARNING - zones_not_ok is 1: domain.tld (outside "
-                "range 0:0) | zones_not_ok=1;0;~:"
-            ),
-            "request_history": [
-                ("udp", "domain.tld."),
-            ],
-        },
-    ),
-    (
-        # CRIT and check precise output
-        {
-            "port": SRV_PORT_1,
-            "zone_soa_mappings": {
-                "domain.tld": 1,
-            },
-        },
-        {
-            "port": SRV_PORT_2,
-            "zone_soa_mappings": {
-                "domain.tld": 5,
-            },
-        },
-        [
-            "--zone",
-            "domain.tld",
-            f"localhost:{SRV_PORT_1}",
-            f"localhost:{SRV_PORT_2}",
-        ],
-        {
-            "returncode": 2,
-            "output": (
-                "SOASERIALS CRITICAL - zones_not_ok is 1: domain.tld (outside range "
-                "0:0) | zones_not_ok=1;0;0"
-            ),
-            "request_history": [
-                ("udp", "domain.tld."),
-            ],
-        },
-    ),
 ]
 
 
@@ -248,13 +325,14 @@ test_cases: list = [
     "dummy_server_1,dummy_server_2,args,expected",
     test_cases,
     indirect=["dummy_server_1", "dummy_server_2"],
-    ids=[
-        "OK with default thresholds and check precise output",
-        "OK with zones from file",
-        "OK with default thresholds over TCP",
-        "WARN instead of CRIT and check precise output",
-        "CRIT and check precise output",
-    ],
+    # ids=[
+    #     "OK with default count thresholds and check precise output",
+    #     "OK with default count thresholds and a serial diff within range",
+    #     "OK with zones from file",
+    #     "OK with default count thresholds over TCP",
+    #     "WARN instead of CRIT and check precise output",
+    #     "CRIT and check precise output",
+    # ],
 )
 def test_end_to_end(
     capsys: pytest.CaptureFixture,

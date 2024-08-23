@@ -18,6 +18,8 @@ U = TypeVar("U", bound=nagiosplugin.Metric)
 logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 53
+RANGE_NEVER_ALERT = "~:"
+RANGE_ALERT_GT_0 = "0"
 
 
 def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
@@ -73,7 +75,7 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
         "--critical",
         "-c",
         default="0",
-        help=("Critical range for the number of SOA serials that are not OK"),
+        help=("Critical range for the difference between SOA serials"),
         type=str,
     )
 
@@ -81,7 +83,7 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
         "--warning",
         "-w",
         default="0",
-        help=("Warning range for the number of SOA serials that are not OK"),
+        help=("Warning range for the difference between SOA serials"),
         type=str,
     )
 
@@ -265,9 +267,14 @@ class SOASerials(nagiosplugin.Resource):
                 )
                 logger.debug("Zone `%s` serial OK", zone)
         yield nagiosplugin.Metric(
-            "zones_not_ok",
-            crit_zones_c + warn_zones_c,
-            context="zones_not_ok",
+            "zones_critical",
+            crit_zones_c,
+            context="zones_critical",
+        )
+        yield nagiosplugin.Metric(
+            "zones_warning",
+            warn_zones_c,
+            context="zones_warning",
         )
 
 
@@ -302,13 +309,19 @@ def main(
         warn_range=args.warning,
         crit_range=args.critical,
     )
-    context_alterting = nagiosplugin.ScalarContext(
-        "zones_not_ok",
-        critical=args.critical,
-        warning=args.warning,
+    context_crit = nagiosplugin.ScalarContext(
+        "zones_critical",
+        critical=RANGE_ALERT_GT_0,
+        warning=RANGE_NEVER_ALERT,
         fmt_metric=formatter,
     )
-    check = nagiosplugin.Check(soa_serials, context_alterting)
+    context_warn = nagiosplugin.ScalarContext(
+        "zones_warning",
+        critical=RANGE_NEVER_ALERT,
+        warning=RANGE_ALERT_GT_0,
+        fmt_metric=formatter,
+    )
+    check = nagiosplugin.Check(soa_serials, context_crit, context_warn)
     check.main(args.verbosity)
 
 
