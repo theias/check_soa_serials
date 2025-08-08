@@ -84,7 +84,7 @@ $(BUILD): $(DEPENDENCIES)
 	touch $(BUILD)
 
 .PHONY: publish
-publish: package
+publish: 
 	@test $${TWINE_PASSWORD?Please set environment variable TWINE_PASSWORD in order to publish}
 	./venv/bin/python3 -m twine upload --username __token__ $(BUILD_DIR)/*
 
